@@ -19,7 +19,7 @@ def get_connection():
 
 
 def init_db():
-    """初始化数据库表结构"""
+    """初始化数据库表结构并执行迁移"""
     conn = get_connection()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS starred_repos (
@@ -32,22 +32,35 @@ def init_db():
             language    TEXT,
             url         TEXT,
             description TEXT,
-            processed_date TEXT
+            processed_date TEXT,
+            owner_username TEXT
         )
     """)
+    
+    # 自动迁移：尝试给老数据库添加 owner_username 字段
+    try:
+        conn.execute("ALTER TABLE starred_repos ADD COLUMN owner_username TEXT")
+    except sqlite3.OperationalError:
+        # 如果列已经存在，就会报错，忽略即可
+        pass
+        
     conn.commit()
     conn.close()
 
 
-def get_existing_ids() -> set:
-    """返回本地数据库中已记录的全部项目 ID 集合"""
+def get_existing_ids(owner_username: str = "") -> set:
+    """返回本地数据库中该用户已记录的项目 ID 集合"""
     conn = get_connection()
-    rows = conn.execute("SELECT id FROM starred_repos").fetchall()
+    if owner_username:
+        rows = conn.execute("SELECT id FROM starred_repos WHERE owner_username = ?", (owner_username,)).fetchall()
+    else:
+        # 兼容老数据或空用户（Token本身登录用户）状态
+        rows = conn.execute("SELECT id FROM starred_repos WHERE owner_username = '' OR owner_username IS NULL").fetchall()
     conn.close()
     return {row["id"] for row in rows}
 
 
-def upsert_repo(repo: dict):
+def upsert_repo(repo: dict, owner_username: str = ""):
     """
     插入或更新一条项目记录。
     repo 字典应包含：id, name, stars, summary, category, tags(list), language, url, description
@@ -55,8 +68,8 @@ def upsert_repo(repo: dict):
     conn = get_connection()
     tags_json = json.dumps(repo.get("tags", []), ensure_ascii=False)
     conn.execute("""
-        INSERT INTO starred_repos (id, name, stars, summary, category, tags, language, url, description, processed_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO starred_repos (id, name, stars, summary, category, tags, language, url, description, processed_date, owner_username)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             name=excluded.name,
             stars=excluded.stars,
@@ -66,7 +79,8 @@ def upsert_repo(repo: dict):
             language=excluded.language,
             url=excluded.url,
             description=excluded.description,
-            processed_date=excluded.processed_date
+            processed_date=excluded.processed_date,
+            owner_username=excluded.owner_username
     """, (
         repo["id"],
         repo["name"],
@@ -78,6 +92,7 @@ def upsert_repo(repo: dict):
         repo.get("url"),
         repo.get("description"),
         datetime.now().isoformat(),
+        owner_username,
     ))
     conn.commit()
     conn.close()

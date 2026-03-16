@@ -170,7 +170,7 @@ class StarMindApp(ctk.CTk):
         ctk.CTkLabel(slider_frame, text="并发线程数：").pack(side="left")
         self.thread_label = ctk.CTkLabel(slider_frame, text="5", width=30, font=ctk.CTkFont(weight="bold"))
         self.thread_label.pack(side="left", padx=(4, 8))
-        self.thread_slider = ctk.CTkSlider(slider_frame, from_=1, to=10, number_of_steps=9,
+        self.thread_slider = ctk.CTkSlider(slider_frame, from_=1, to=20, number_of_steps=19,
                                             command=lambda v: self.thread_label.configure(text=str(int(v))))
         self.thread_slider.set(5)
         self.thread_slider.pack(side="left", fill="x", expand=True)
@@ -329,13 +329,20 @@ class StarMindApp(ctk.CTk):
             )
             self._log(f"📊 远程共 {len(remote_repos)} 个 Star 项目。")
 
-            # Step 2: 增量比对
-            existing_ids = db.get_existing_ids()
+            # Step 2: 进度恢复与按用户增量同步
+            # 只获取当前要同步的这个用户的已存在记录
+            existing_ids = db.get_existing_ids(username)
             new_repos = [r for r in remote_repos if r["id"] not in existing_ids]
-            self._log(f"🆕 新增 {len(new_repos)} 个项目需要处理（已跳过 {len(remote_repos) - len(new_repos)} 个）。")
+            
+            # 记录跳过数量
+            skipped_count = len(remote_repos) - len(new_repos)
+            if username:
+                self._log(f"🆕 发现 {len(new_repos)} 个新项目（属于 {username}）。已跳过 {skipped_count} 个已备份项目。")
+            else:
+                self._log(f"🆕 发现 {len(new_repos)} 个新项目。已跳过 {skipped_count} 个已备份项目。")
 
             self._stats["total"] = len(new_repos)
-            self._stats["skip"] = len(remote_repos) - len(new_repos)
+            self._stats["skip"] = skipped_count
 
             if not new_repos:
                 self._log("✅ 无新增项目，数据库已是最新。")
@@ -414,7 +421,8 @@ class StarMindApp(ctk.CTk):
                     if not repo_data.get("category"):
                         repo_data["category"] = "其他"
 
-                    db.upsert_repo(repo_data)
+                    # 落库，带上当前的 owner_username
+                    db.upsert_repo(repo_data, owner_username=username)
                     return True
                 except Exception as e:
                     self._log(f"  ❌ 处理失败 {repo['name']}: {e}")

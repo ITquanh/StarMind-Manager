@@ -69,7 +69,7 @@ def _call_llm(client: OpenAI, model: str, user_content: str, is_stopped=None) ->
                     {"role": "user", "content": user_content},
                 ],
                 temperature=0.3,
-                max_tokens=1000,
+                max_tokens=2000,
                 timeout=60,
             )
             content = response.choices[0].message.content

@@ -372,6 +372,7 @@ class StarMindApp(ctk.CTk):
                         "language": repo["language"],
                         "url": repo["url"],
                         "description": repo["description"],
+                        "starred_at": repo.get("starred_at", ""),
                     }
 
                     readme_text = ""

@@ -423,6 +423,12 @@ class StarMindApp(ctk.CTk):
 
                     # 落库，带上当前的 owner_username
                     db.upsert_repo(repo_data, owner_username=username)
+
+                    # 为免费版 API 增加 3 秒冷却保护，防止触发每分钟请求频率限制
+                    if has_llm:
+                        import time
+                        time.sleep(3)
+
                     return True
                 except Exception as e:
                     self._log(f"  ❌ 处理失败 {repo['name']}: {e}")

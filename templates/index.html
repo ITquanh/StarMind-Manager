@@ -47,8 +47,8 @@
 
 <!-- Jinja2 数据注入区（仅此区域使用 Jinja2 语法） -->
 <script>
-const RAW_DATA = {{ repos_json }};
-const CATEGORIES = {{ categories_json }};
+const RAW_DATA = {{ repos_json | safe }};
+const CATEGORIES = {{ categories_json | safe }};
 const TOTAL_COUNT = {{ total_count }};
 </script>
 
@@ -85,18 +85,30 @@ const TOTAL_COUNT = {{ total_count }};
     </header>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        <!-- 分类筛选条 -->
-        <div class="flex flex-wrap gap-2 mb-6">
-            <button @click="activeCategory = ''" id="filter-all"
-                :class="['tag-pill px-4 py-1.5 rounded-full text-sm font-medium border transition-colors',
-                    activeCategory === '' ? 'bg-brand-600 text-white border-brand-600 shadow-md shadow-brand-600/30' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-brand-400']">
-                全部
-            </button>
-            <button v-for="cat in categories" :key="cat" @click="activeCategory = cat"
-                :class="['tag-pill px-4 py-1.5 rounded-full text-sm font-medium border transition-colors',
-                    activeCategory === cat ? 'bg-brand-600 text-white border-brand-600 shadow-md shadow-brand-600/30' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-brand-400']">
-                {{ cat }}
-            </button>
+        <!-- 分类筛选和排序控制区 -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <!-- 分类筛选拉条 -->
+            <div class="flex flex-wrap gap-2">
+                <button @click="activeCategory = ''" id="filter-all"
+                    :class="['tag-pill px-4 py-1.5 rounded-full text-sm font-medium border transition-colors',
+                        activeCategory === '' ? 'bg-brand-600 text-white border-brand-600 shadow-md shadow-brand-600/30' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-brand-400']">
+                    全部
+                </button>
+                <button v-for="cat in categories" :key="cat" @click="activeCategory = cat"
+                    :class="['tag-pill px-4 py-1.5 rounded-full text-sm font-medium border transition-colors',
+                        activeCategory === cat ? 'bg-brand-600 text-white border-brand-600 shadow-md shadow-brand-600/30' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-brand-400']">
+                    {{ cat }}
+                </button>
+            </div>
+            
+            <!-- 排序控制 -->
+            <div class="flex items-center gap-2 text-sm">
+                <span class="text-gray-500 dark:text-gray-400">排序:</span>
+                <select v-model="sortBy" class="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/50">
+                    <option value="stars">⭐ Star 数量</option>
+                    <option value="date">📅 收藏时间</option>
+                </select>
+            </div>
         </div>
 
         <!-- 激活标签提示 -->
@@ -127,7 +139,7 @@ const TOTAL_COUNT = {{ total_count }};
                 <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-4 line-clamp-2">
                     {{ repo.summary || repo.description || '暂无描述' }}
                 </p>
-                <div class="flex flex-wrap items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2 mb-3">
                     <span v-if="repo.language" class="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-lg">
                         💻 {{ repo.language }}
                     </span>
@@ -139,6 +151,11 @@ const TOTAL_COUNT = {{ total_count }};
                         class="tag-pill text-xs font-medium text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30 px-2 py-1 rounded-lg cursor-pointer hover:bg-brand-100 dark:hover:bg-brand-800/50">
                         #{{ tag }}
                     </span>
+                </div>
+                <!-- 底部时间和链接区 -->
+                <div class="flex justify-between items-center text-xs text-gray-400 dark:text-gray-500 pt-3 border-t border-gray-100 dark:border-gray-800/50">
+                    <span v-if="repo.starred_at">🕒 收藏于 {{ formatDate(repo.starred_at) }}</span>
+                    <span v-else>🕒 暂无时间</span>
                 </div>
             </a>
         </div>
@@ -167,6 +184,7 @@ createApp({
         const searchQuery = ref('');
         const activeCategory = ref('');
         const activeTag = ref('');
+        const sortBy = ref('stars'); // 'stars' or 'date'
         const isDark = ref(false);
         const repos = ref(RAW_DATA);
         const categories = ref(CATEGORIES);
@@ -186,7 +204,7 @@ createApp({
         });
 
         const filteredRepos = computed(() => {
-            let result = RAW_DATA;
+            let result = [...RAW_DATA]; // Create a copy to sort safely
             if (searchQuery.value.trim()) {
                 result = fuse.search(searchQuery.value.trim()).map(r => r.item);
             }
@@ -196,6 +214,18 @@ createApp({
             if (activeTag.value) {
                 result = result.filter(r => (r.tags || []).includes(activeTag.value));
             }
+            
+            // 排序逻辑
+            if (sortBy.value === 'date') {
+                result.sort((a, b) => {
+                    const dateA = a.starred_at ? new Date(a.starred_at).getTime() : 0;
+                    const dateB = b.starred_at ? new Date(b.starred_at).getTime() : 0;
+                    return dateB - dateA; // 降序，最新收藏在前
+                });
+            } else {
+                result.sort((a, b) => (b.stars || 0) - (a.stars || 0)); // 默认降序，星最多在前
+            }
+            
             return result;
         });
 
@@ -209,8 +239,14 @@ createApp({
             return count;
         };
 
-        return { searchQuery, activeCategory, activeTag, isDark, repos, categories,
-                 totalCount, filteredRepos, toggleDark, formatStars };
+        const formatDate = (dateStr) => {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        };
+
+        return { searchQuery, activeCategory, activeTag, sortBy, isDark, repos, categories,
+                 totalCount, filteredRepos, toggleDark, formatStars, formatDate };
     }
 }).mount('#app');
 </script>

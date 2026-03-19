@@ -1,121 +1,113 @@
-# 📜 StarMind Manager 产品需求文档 (PRD)
+# ⭐ StarMind Manager
 
-## 1. 文档概述
+一款面向开发者的 **GitHub Star 资产智能管理工具**。用 AI 将你收藏的项目转化为结构化的中文知识库，支持离线搜索和智能分类。
 
-| 属性 | 说明 |
-| --- | --- |
-| **产品名称** | StarMind Manager |
-| **文档版本** | V1.0 |
-| **产品状态** | 规划/设计中 |
-| **目标用户** | 开发者、研究人员、重度 GitHub 依赖者 |
+## ✨ 核心功能
+
+- **🔐 可视化配置** - GUI 界面轻松管理 GitHub Token 和 LLM API 密钥
+- **📡 智能同步** - 支持增量更新，只处理新增项目，节省时间和成本
+- **🤖 AI 分析** - 接入大模型自动生成中文摘要、技术标签和分类
+- **🌐 离线知识库** - 导出为单页 HTML，支持全文搜索、标签过滤、暗黑模式
+- **⚡ 高效并发** - 可调节线程数，快速处理数百个项目
+
+## 🚀 快速开始
+
+### 环境要求
+- Python 3.10+
+- pip
+
+### 安装
+
+```bash
+# 克隆项目
+git clone https://github.com/yourusername/GetGithub.git
+cd GetGithub
+
+# 安装依赖
+pip install -r requirements.txt
+```
+
+### 运行
+
+```bash
+python main.py
+```
+
+## 📖 使用步骤
+
+### 1️⃣ 配置阶段（⚙️ 配置 Tab）
+
+**GitHub 配置：**
+- 填写 Personal Access Token（[获取方法](https://github.com/settings/tokens/new?scopes=repo,read:user&description=StarMind+Manager)）
+- 可选：指定目标用户名（留空则获取 Token 拥有者的 Star）
+- 点击「🔍 检测 Rate Limit」验证 Token 有效性
+
+**LLM 配置：**
+- Base URL：支持所有 OpenAI 兼容接口（DeepSeek、Qwen、Kimi、Ollama 等）
+- API Key：填写对应服务的密钥
+- 模型名称：如 `gpt-3.5-turbo`、`deepseek-chat` 等
+- 点击「🧪 测试连通性」验证配置
+
+### 2️⃣ 同步阶段（🚀 任务 Tab）
+
+- 调节「并发线程数」（建议 5-10，防止被限流）
+- 点击「▶ 开始同步」启动任务
+- 实时查看日志和进度条
+- 支持中途「⏹ 停止」
+
+### 3️⃣ 导出阶段（📤 导出 Tab）
+
+- 点击「🔄 刷新统计」查看数据库项目数
+- 点击「🌐 导出为 HTML 知识库」生成离线站点
+- 自动打开浏览器预览，可双击 `index.html` 随时查看
+
+## 🛠 技术栈
+
+| 模块 | 技术 |
+|------|------|
+| **GUI** | CustomTkinter |
+| **数据库** | SQLite3 |
+| **网络** | requests + ThreadPoolExecutor |
+| **模板** | Jinja2 |
+| **前端** | HTML/JS + Vue 3 (CDN) + Tailwind CSS + Fuse.js |
+
+## 📊 数据库结构
+
+项目信息存储在 SQLite 中，包含：
+- 项目名称、URL、Star 数量
+- AI 生成的中文摘要
+- 智能分类和技术标签
+- 主要编程语言
+- 处理时间戳
+
+## 🔒 安全说明
+
+- GitHub Token 和 LLM API Key 保存在本地 `config.json`
+- **建议**：不要将 `config.json` 上传到公开仓库
+- 可使用系统密钥链进一步加密敏感信息
+
+## 📝 常见问题
+
+**Q: 为什么同步很慢？**
+A: 受 GitHub API 限流影响。建议：
+- 使用高权限 Token（提高限额）
+- 减少并发线程数
+- 利用增量更新功能
+
+**Q: LLM 分析失败怎么办？**
+A: 系统会自动降级，使用 GitHub 原生的 Description 和 Topics 字段，确保数据不丢失。
+
+**Q: 导出的 HTML 能在哪里打开？**
+A: 纯静态文件，任何浏览器都支持。可本地打开、上传到 GitHub Pages、Vercel 等。
+
+## 📄 许可证
+
+MIT License
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
 
 ---
 
-## 2. 项目定位与背景
-
-### 2.1 产品背景
-随着开发者在 GitHub 上 Star 的项目越来越多，传统的原生 Star 列表缺乏有效的分类、搜索和整理机制，导致大量优质资源“吃灰”，难以在需要时快速检索。同时，许多项目的 Readme 冗长且为纯英文，进一步增加了筛选和理解成本。
-
-### 2.2 产品定位
-**StarMind Manager** 是一款面向开发者的 GitHub Star 资产智能管理工具。它通过可视化界面管理 API 密钥，利用大模型（LLM）将枯燥的项目 Readme 转化为结构化的中文知识库，最终生成一个支持本地离线搜索、分类聚合、且具有响应式设计的现代静态 HTML 导航站点。
-
----
-
-## 3. 核心需求与业务场景
-
-### 3.1 核心痛点与解决方案
-| 核心模块 | 业务痛点 | 解决方案 |
-| --- | --- | --- |
-| **GUI 界面** | 纯命令行脚本操作繁琐，API Key 及配置参数管理不便。 | 提供现代化 GUI，支持快捷配置 GitHub Token 和 LLM API，实时可视化监控同步进度。 |
-| **数据采集** | Star 数量庞大（几百上千个）时，全量同步极其缓慢。 | 深度优化采集逻辑，支持多线程并发调用 GitHub API，并引入本地数据库实现增量更新。 |
-| **AI 智能增强** | 英文 Readme 阅读门槛高，项目功能不直观，分类混乱。 | 接入 LLM 进行自动分析，输出精准中文总结、核心技术栈标签及结构化语义分类。 |
-| **展示聚合** | 收藏后的项目缺乏有效的浏览与二次检索手段。 | 离线生成带模糊搜索、标签过滤、暗黑模式的现代 HTML 站点，双击即用。 |
-
-### 3.2 用户故事 (User Stories)
-* **作为一个开发者**，我希望能在界面上配置并保存我的 GitHub Token，这样我就不需要每次执行时通过命令行传参或修改代码。
-* **作为一个重度开源爱好者**，我希望系统能够进行**增量更新**（只处理我新 Star 的项目），这样可以大幅节省同步等待时间和 LLM API Token 的消耗成本。
-* **作为一个技术人员**，我希望导出的 HTML 离线页面也能进行快速搜索，这样即便在弱网或飞机上，我依然能查阅我的资产库。
-
----
-
-## 4. 功能详细说明
-
-### 4.1 可视化管理后台 (GUI)
-1. **基础配置模块**：
-   * **GitHub 鉴权**：支持输入 Personal Access Token (PAT)，实时验证并可视化展示 GitHub API 剩余请求额度（Rate Limit）。
-   * **LLM 引擎配置**：全面支持 OpenAI 兼容格式接口，允许自定义 Base URL 和模型名称（原生兼容 DeepSeek, Qwen, Kimi 等），提供一键 API 连通性测试。
-2. **任务与调度模块**：
-   * **并发控制**：提供并发滑块组件，支持动态调节多线程网络请求数量（建议范围：1-10 线程，防止被限流）。
-   * **日志与监控**：提供实时滚动的控制台日志面板，显示当前正在处理的项目名称及处理状态（获取 Readme、AI 总结中、落库成功等）。
-   * **进度反馈**：全局进度条直观展示实时数据 `成功数 / 失败数 / 尚未处理数 / 总数`。
-
-### 4.2 智能处理与调度引擎 (Backend)
-1. **增量同步策略**：
-   * 系统启动扫描本地 SQLite 数据库中已记录的项目 ID。
-   * 分页请求 GitHub API 获取远程 Star 列表，迅速比对并提取差异增量。
-   * 仅对新增项目发起 LLM 数据清洗和分析请求，降低服务开销。
-2. **LLM Prompt 工程优化**：
-   * **文本截断机制**：在保障核心信息的前提下，默认截断 Readme 前 1000 - 1500 字符发送给大模型，兼顾模型响应速度与上下文成本。
-   * **结构化数据约束**：采用强制 JSON 输出指令（如 JSON Mode 或 JSON Schema），指定大模型输出规范数据结构（包含：一句话精准中文摘要、核心编程语言、3个核心技术标签、1个主类目）。
-3. **稳健性与异常流处理**：
-   * **网络退避机制**：针对 GitHub API 限流或 LLM 接口超时，引入指数退避（Exponential Backoff）算法进行自动重试（默认上限 3 次）。
-   * **优雅降级 (Fallback)**：若连续重试后 LLM 解析依然失败，系统自动降级回退，回填 GitHub 原生的 `Description` 和 `Topics` 字段完成数据落库，确保爬取任务不阻断。
-
-### 4.3 HTML 离线知识库聚合 (Frontend)
-1. **核心特性**：
-   * **纯静态架构 (无后端)**：所有数据在编译时混入 HTML 的 `const DATA = [...]` 中，达到零后端依赖，双击 `index.html` 即可极速访问。
-   * **超快检索引擎**：集成前端全文检索引擎 **Fuse.js**，支持针对中文摘要、英文原名、技术标签的毫秒级多重模糊搜索。
-2. **交互体验**：
-   * **多维过滤**：点击卡片任意技术标签（如 `#Vue`, `#Docker`），能够快速聚合相似类型项目。
-   * **自适应主题**：内置明亮/暗黑 (Light / Dark) 双轨模式，支持跟随系统颜色倾向自动切换，适配夜间阅读。
-   * **端云统一样式**：基于 Tailwind CSS 实现完全响应式布局（完美适配手机、平板及大屏显示器分栏结构）。
-
----
-
-## 5. 技术架构与数据存储设计
-
-### 5.1 技术栈选型
-* **核心语言**：Python 3.10+
-* **桌面端 GUI**：PyQt6 或 CustomTkinter
-* **持久化本地存储**：SQLite3 (轻量级单文件嵌入式数据库)
-* **网络与高并发**：`httpx` 或 `requests`结合 `concurrent.futures.ThreadPoolExecutor`
-* **模板引擎渲染**：Jinja2 (用于 HTML 骨架构建与离线数据注入)
-* **前端展示页面**：原生 HTML/JS + Vue 3 (CDN 引入) + Tailwind CSS + Fuse.js
-
-### 5.2 数据库 Schema 规划 (SQLite - `starred_repos` 表)
-
-| 字段名 | 数据类型 | 说明 | 约束 |
-| --- | --- | --- | --- |
-| `id` | INT | GitHub 官方项目全局唯一 ID | PRIMARY KEY |
-| `name` | VARCHAR | 项目完整命名空间 (例如 `owner/repo`) | NOT NULL |
-| `stars` | INT | 项目当前自带的 Star 数量（可用于热度排序） | DEFAULT 0 |
-| `summary` | TEXT | AI 生成的中文高精度摘要（或降级后的英文描述） | - |
-| `category` | VARCHAR | AI 智能分配的宏观分类（如：后端框架、运维工具） | - |
-| `tags` | TEXT | JSON 序列化存储的细分技术标签栈 | - |
-| `language` | VARCHAR | 该项目的主要编程语言 | - |
-| `url` | VARCHAR | GitHub 仓库原地址链接 | - |
-| `processed_date` | TIMESTAMP| 本地抓取并处理完成的时间戳 | - |
-
----
-
-## 6. 非功能性需求 (NFR)
-
-1. **隐私与安全性 (Security)**
-   * GitHub PAT 以及第三方 LLM API Key 需要通过系统级密钥链存储或本地加密文件持久化，严禁明文硬编码和上传代码库。
-2. **性能与体验 (Performance)**
-   * 处理大规模 Star (2000+) 列表时，本地数据库比对与读写耗时应控制在 1 秒以内。
-   * 生成的静态 HTML 单页面渲染数千条记录时，通过虚拟列表 (Virtual Scroll) 或分页技术确保首屏滚动更新不卡顿，搜索输入迟滞 < 100ms。
-3. **可移植封装 (Portability)**
-   * Python 后端需使用工具（如 PyInstaller / Nuitka）实现一键跨平台脱壳打包，向无 Python 环境的用户交付独立的 `.exe` (Windows) 和 `.app` (macOS) 执行程序。
-
----
-
-## 7. 演进路线图 (Roadmap)
-
-* **Phase 1 (MVP - Alpha)**：跑通底层管道逻辑；开发基础 GUI；实现 GitHub API 的全量与增量获取，完成 SQLite 数据落库机制。
-* **Phase 2 (AI Integration)**：对接大模型；完善 Prompt 工程与 JSON 格式化输出的容错测试。
-* **Phase 3 (Frontend Polish)**：使用 Jinja2 组装、设计并输出带现代 UI 与搜索特性的单一 HTML 站点。
-* **Phase 4 (Advanced Features)**：
-  * 支持提取并离线缓存 Readme 中的首张功能演示大图/Logo。
-  * 引入 Semantic Search（基于本地或在线 Embedding 向量检索引擎的语义搜索）。
-  * 增加一键将其部署至 GitHub Pages / Vercel 的拓展功能。
+**Made with ❤️ for developers who love open source**

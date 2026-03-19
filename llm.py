@@ -9,13 +9,15 @@ import time
 from openai import OpenAI
 
 
-SYSTEM_PROMPT = """你是一个 GitHub 项目分析助手。根据用户提供的项目信息，输出以下 JSON 格式的分析结果（不要输出任何多余文本，只输出纯 JSON）：
+SYSTEM_PROMPT = """你是一个专业的 GitHub 项目分析助手。请根据用户提供的项目内容（Readme、描述或目录结构），进行深度总结。
+请务必输出以下 JSON 格式的分析结果（不要输出任何多余的解释、寒暄或非 JSON 文本，只输出纯 JSON 包裹的数据）：
 {
-  "summary": "一句话中文精准摘要（不超过80字）",
-  "language": "该项目的主要编程语言",
+  "summary": "请用详细、通顺专业的【中文】总结该项目的核心功能、技术特点、主要用途以及适用场景（字数严格在300字到350字之间）。注意：无论原文是什么语言，这里必须输出对应的中文。",
+  "language": "该项目的主要编程语言（保留英文原名，如 Python, Vue, Rust）",
   "tags": ["技术标签1", "技术标签2", "技术标签3"],
-  "category": "项目所属类别，从以下选项中选取最匹配的一个：AI/ML, Web框架, 移动开发, DevOps/运维, 数据库, 安全工具, 命令行工具, 编程语言/编译器, 前端UI, 后端框架, 文档/知识库, 测试工具, 网络/通信, 多媒体, 游戏开发, 系统工具, 区块链, 数据分析, 自动化, 其他"
-}"""
+  "category": "项目所属类别，请务必从以下选项中严格选取最匹配的一个：AI与大模型, 后端开发, 前端开发, 移动端开发, 数据库与存储, 运维/DevOps, 测试与安全, 效率辅助工具, 桌面系统应用, 爬虫与数据提取, 影音媒体处理, 独立游戏与开发引擎, 区块链/Web3, 学习教程与资料, 其他"
+}
+注意：如果无法判断分类，请统一填写为 "其他"。任何情况下都必须返回上述合法的 JSON 格式。"""
 
 MAX_README_CHARS = 1500
 MAX_RETRIES = 3
@@ -25,17 +27,11 @@ def _parse_llm_json(content: str) -> dict | None:
     """从 LLM 返回内容中提取 JSON（兼容 markdown 代码块包裹）"""
     text = content.strip()
 
-    # 移除 ```json ... ``` 包裹
-    if text.startswith("```"):
-        lines = text.split("\n")
-        json_lines = []
-        in_block = False
-        for line in lines:
-            if line.strip().startswith("```"):
-                in_block = not in_block
-                continue
-            json_lines.append(line)
-        text = "\n".join(json_lines).strip()
+    # 使用正则表达式提取大括号内的内容
+    import re
+    match = re.search(r'(\{.*\})', text, re.DOTALL)
+    if match:
+        text = match.group(1)
 
     try:
         result = json.loads(text)
@@ -62,7 +58,7 @@ def _call_llm(client: OpenAI, model: str, user_content: str) -> dict | None:
                     {"role": "user", "content": user_content},
                 ],
                 temperature=0.3,
-                max_tokens=500,
+                max_tokens=1000,
                 timeout=30,
             )
             content = response.choices[0].message.content
@@ -70,7 +66,9 @@ def _call_llm(client: OpenAI, model: str, user_content: str) -> dict | None:
                 result = _parse_llm_json(content)
                 if result:
                     return result
-        except Exception:
+        except Exception as e:
+            safe_e = str(e).encode('ascii', errors='ignore').decode('ascii')
+            print(f"LLM call or parse error on attempt {attempt+1}: {safe_e}")
             pass
         if attempt < MAX_RETRIES - 1:
             time.sleep(2 ** attempt)
@@ -147,4 +145,5 @@ def test_connection(base_url: str, api_key: str, model: str) -> tuple[bool, str]
             
         return True, f"连接成功！模型回复：{reply}"
     except Exception as e:
-        return False, f"连接失败：{str(e)}"
+        safe_err = str(e).encode('ascii', errors='ignore').decode('ascii')
+        return False, f"连接失败：{safe_err}"

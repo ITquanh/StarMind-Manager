@@ -4,10 +4,19 @@ StarMind Manager - GitHub API 模块
 """
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import base64
 import time
 
 API_BASE = "https://api.github.com"
+
+# 配置全局 Session 处理网络闪断和重试 (如 RemoteDisconnected)
+_session = requests.Session()
+_retry = Retry(total=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["GET"])
+_adapter = HTTPAdapter(max_retries=_retry)
+_session.mount("http://", _adapter)
+_session.mount("https://", _adapter)
 
 # GitHub Token 申请地址
 TOKEN_URL = "https://github.com/settings/tokens/new?scopes=repo,read:user&description=StarMind+Manager"
@@ -33,7 +42,7 @@ def check_rate_limit(token: str) -> dict:
     查询 GitHub API 剩余额度。
     返回：{"limit": int, "remaining": int, "reset": int(unix时间戳)}
     """
-    resp = requests.get(f"{API_BASE}/rate_limit", headers=_headers(token), timeout=15)
+    resp = _session.get(f"{API_BASE}/rate_limit", headers=_headers(token), timeout=15)
     resp.raise_for_status()
     core = resp.json()["resources"]["core"]
     return {
@@ -60,10 +69,14 @@ def fetch_starred_repos(token: str, username: str = "", callback=None) -> list:
     else:
         url = f"{API_BASE}/user/starred"
 
+    # 使用特殊的 Accept header 取回 starred_at 时间
+    custom_headers = _headers(token)
+    custom_headers["Accept"] = "application/vnd.github.v3.star+json"
+
     while True:
-        resp = requests.get(
+        resp = _session.get(
             url,
-            headers=_headers(token),
+            headers=custom_headers,
             params={"page": page, "per_page": per_page},
             timeout=30,
         )
@@ -75,14 +88,19 @@ def fetch_starred_repos(token: str, username: str = "", callback=None) -> list:
 
         repos = []
         for item in data:
+            # 使用 .star+json header 时，数据结构变为 {"starred_at": "...", "repo": {...}}
+            starred_at = item.get("starred_at", "")
+            repo_data = item.get("repo", item) # 兼容普通查询
+            
             repos.append({
-                "id": item["id"],
-                "name": item["full_name"],
-                "stars": item["stargazers_count"],
-                "language": item.get("language"),
-                "url": item["html_url"],
-                "description": item.get("description") or "",
-                "topics": item.get("topics", []),
+                "id": repo_data["id"],
+                "name": repo_data["full_name"],
+                "stars": repo_data["stargazers_count"],
+                "language": repo_data.get("language"),
+                "url": repo_data["html_url"],
+                "description": repo_data.get("description") or "",
+                "topics": repo_data.get("topics", []),
+                "starred_at": starred_at,
             })
 
         all_repos.extend(repos)
@@ -106,7 +124,7 @@ def fetch_readme(token: str, repo_full_name: str) -> str:
     失败时返回空字符串。
     """
     try:
-        resp = requests.get(
+        resp = _session.get(
             f"{API_BASE}/repos/{repo_full_name}/readme",
             headers=_headers(token),
             timeout=20,
@@ -131,7 +149,7 @@ def fetch_repo_tree(token: str, repo_full_name: str) -> str:
     返回格式化的目录树文本。失败时返回空字符串。
     """
     try:
-        resp = requests.get(
+        resp = _session.get(
             f"{API_BASE}/repos/{repo_full_name}/contents/",
             headers=_headers(token),
             timeout=15,
@@ -158,7 +176,7 @@ def fetch_repo_info(token: str, repo_full_name: str) -> dict:
     用作内容获取的补充手段。
     """
     try:
-        resp = requests.get(
+        resp = _session.get(
             f"{API_BASE}/repos/{repo_full_name}",
             headers=_headers(token),
             timeout=15,

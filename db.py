@@ -33,7 +33,8 @@ def init_db():
             url         TEXT,
             description TEXT,
             processed_date TEXT,
-            owner_username TEXT
+            owner_username TEXT,
+            starred_at TEXT
         )
     """)
     
@@ -41,7 +42,12 @@ def init_db():
     try:
         conn.execute("ALTER TABLE starred_repos ADD COLUMN owner_username TEXT")
     except sqlite3.OperationalError:
-        # 如果列已经存在，就会报错，忽略即可
+        pass
+        
+    # 自动迁移：尝试给老数据库添加 starred_at 字段
+    try:
+        conn.execute("ALTER TABLE starred_repos ADD COLUMN starred_at TEXT")
+    except sqlite3.OperationalError:
         pass
         
     conn.commit()
@@ -68,8 +74,8 @@ def upsert_repo(repo: dict, owner_username: str = ""):
     conn = get_connection()
     tags_json = json.dumps(repo.get("tags", []), ensure_ascii=False)
     conn.execute("""
-        INSERT INTO starred_repos (id, name, stars, summary, category, tags, language, url, description, processed_date, owner_username)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO starred_repos (id, name, stars, summary, category, tags, language, url, description, processed_date, owner_username, starred_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             name=excluded.name,
             stars=excluded.stars,
@@ -80,7 +86,8 @@ def upsert_repo(repo: dict, owner_username: str = ""):
             url=excluded.url,
             description=excluded.description,
             processed_date=excluded.processed_date,
-            owner_username=excluded.owner_username
+            owner_username=excluded.owner_username,
+            starred_at=excluded.starred_at
     """, (
         repo["id"],
         repo["name"],
@@ -93,6 +100,7 @@ def upsert_repo(repo: dict, owner_username: str = ""):
         repo.get("description"),
         datetime.now().isoformat(),
         owner_username,
+        repo.get("starred_at", ""),
     ))
     conn.commit()
     conn.close()

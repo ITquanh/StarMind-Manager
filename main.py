@@ -406,6 +406,7 @@ class StarMindApp(ctk.CTk):
                             description=extra_desc,
                             repo_tree=repo_tree,
                             repo_name=repo["name"],
+                            is_stopped=self._stop_event.is_set,
                         )
                         if ai_result:
                             repo_data["summary"] = ai_result.get("summary")
@@ -428,7 +429,10 @@ class StarMindApp(ctk.CTk):
                     # 为免费版 API 增加 3 秒冷却保护，防止触发每分钟请求频率限制
                     if has_llm:
                         import time
-                        time.sleep(3)
+                        for _ in range(15):
+                            if self._stop_event.is_set():
+                                return False
+                            time.sleep(0.2)
 
                     return True
                 except Exception as e:

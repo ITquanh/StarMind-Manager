@@ -46,8 +46,19 @@ def _parse_llm_json(content: str) -> dict | None:
         pass
     return None
 
+def _smart_sleep(seconds: float, is_stopped=None):
+    """可被随时中断的安全休眠"""
+    if is_stopped is None:
+        time.sleep(seconds)
+        return
+        
+    steps = int(seconds * 5)
+    for _ in range(max(1, steps)):
+        if is_stopped():
+            raise InterruptedError("Stopped by user")
+        time.sleep(0.2)
 
-def _call_llm(client: OpenAI, model: str, user_content: str) -> dict | None:
+def _call_llm(client: OpenAI, model: str, user_content: str, is_stopped=None) -> dict | None:
     """发送请求到 LLM 并解析 JSON 结果，带 429 感知的智能退避重试"""
     for attempt in range(MAX_RETRIES):
         try:
@@ -75,13 +86,12 @@ def _call_llm(client: OpenAI, model: str, user_content: str) -> dict | None:
             if '429' in err_str:
                 wait_time = 15 * (attempt + 1)  # 15s, 30s, 45s, 60s, 75s
                 print(f"  -> Rate limited (429). Waiting {wait_time}s before retry...")
-                time.sleep(wait_time)
+                _smart_sleep(wait_time, is_stopped)
                 continue
 
         if attempt < MAX_RETRIES - 1:
-            time.sleep(2 ** attempt)
+            _smart_sleep(2 ** attempt, is_stopped)
     return None
-
 
 def summarize_repo(
     base_url: str,
@@ -91,6 +101,7 @@ def summarize_repo(
     description: str = "",
     repo_tree: str = "",
     repo_name: str = "",
+    is_stopped = None
 ) -> dict | None:
     """
     多级内容降级分析策略：
@@ -106,14 +117,14 @@ def summarize_repo(
     # ── 策略 1：Readme 最为信息丰富 ──
     if readme_text and readme_text.strip():
         truncated = readme_text[:MAX_README_CHARS]
-        result = _call_llm(client, model, f"请分析以下 GitHub 项目 [{repo_name}] 的 README 内容：\n\n{truncated}")
+        result = _call_llm(client, model, f"请分析以下 GitHub 项目 [{repo_name}] 的 README 内容：\n\n{truncated}", is_stopped)
         if result:
             return result
 
     # ── 策略 2：使用 Description + Topics ──
     if description and description.strip():
         prompt = f"以下是 GitHub 项目 [{repo_name}] 的简介描述：\n\n{description}\n\n请根据这段简介分析该项目。"
-        result = _call_llm(client, model, prompt)
+        result = _call_llm(client, model, prompt, is_stopped)
         if result:
             return result
 
@@ -123,7 +134,7 @@ def summarize_repo(
             f"这是 GitHub 项目 [{repo_name}] 的顶层文件目录结构，请根据文件和目录名推断这个项目的功能、技术栈和用途：\n\n"
             f"{repo_tree}"
         )
-        result = _call_llm(client, model, prompt)
+        result = _call_llm(client, model, prompt, is_stopped)
         if result:
             return result
 

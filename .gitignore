@@ -5,3 +5,6 @@ __pycache__/
 config.json
 output/
 .gemini/
+build/
+dist/
+*.spec

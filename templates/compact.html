@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StarMind - GitHub Star 知识库 (列表视图)</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+    tailwind.config = {
+        darkMode: 'class',
+        theme: { extend: {
+            fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+            colors: { brand: {50:'#f0f4ff',100:'#dbe4ff',200:'#bac8ff',300:'#91a7ff',400:'#748ffc',500:'#5c7cfa',600:'#4c6ef5',700:'#4263eb',800:'#3b5bdb',900:'#364fc7'} }
+        }}
+    }
+    </script>
+    <style>[v-cloak]{display:none} *{scrollbar-width:thin;scrollbar-color:#94a3b8 transparent} .glass{backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)} .tag-pill{transition:all .2s ease} .tag-pill:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.15)}</style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-950 text-gray-800 dark:text-gray-200 font-sans transition-colors duration-300">
+
+<script>
+const RAW_DATA = {{ repos_json | safe }};
+const CATEGORIES = {{ categories_json | safe }};
+const TAGS = {{ tags_json | safe }};
+const TOTAL_COUNT = {{ total_count }};
+const COLLECTIONS_MAP = {{ collections_map_json | safe }};
+</script>
+
+{% raw %}
+<div id="app" v-cloak>
+    <header class="sticky top-0 z-50 glass bg-white/80 dark:bg-gray-900/80 border-b border-gray-200/60 dark:border-gray-800/60">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 shrink-0">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center"><span class="text-white">⭐</span></div>
+                <h1 class="text-lg font-bold text-brand-600 dark:text-brand-400">StarMind</h1>
+                <span class="text-xs text-gray-400">{{ totalCount }} 项</span>
+            </div>
+            <div class="flex-1 max-w-md relative">
+                <input type="text" v-model="searchQuery" ref="searchInput" placeholder="搜索... (Ctrl+K)"
+                    class="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-100/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-brand-500/50 text-sm">
+                <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+            <button @click="toggleDark" class="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800">
+                <span class="text-base">{{ isDark ? '☀️' : '🌙' }}</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4">
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+            <button @click="activeCategory=''" :class="['tag-pill px-3 py-1 rounded-full text-xs font-medium border', activeCategory==='' ? 'bg-brand-600 text-white border-brand-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700']">全部</button>
+            <button v-for="cat in categories" :key="cat" @click="activeCategory=cat" :class="['tag-pill px-3 py-1 rounded-full text-xs font-medium border', activeCategory===cat ? 'bg-brand-600 text-white border-brand-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700']">{{ cat }}</button>
+        </div>
+        <div v-if="activeTag" class="mb-3 flex items-center gap-2 text-sm">
+            <span class="px-2 py-0.5 bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 rounded-full text-xs font-medium">#{{ activeTag }}</span>
+            <button @click="activeTag=''" class="text-gray-400 hover:text-red-500">✕</button>
+        </div>
+        <p class="text-xs text-gray-400 mb-3">显示 {{ filteredRepos.length }} 个项目</p>
+
+        <!-- List View -->
+        <div class="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+            <div class="flex items-center gap-3 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-xs font-semibold text-gray-500">
+                <span class="w-14 text-right">Star</span>
+                <span class="flex-1">项目名称</span>
+                <span class="w-24 hidden md:block">语言</span>
+                <span class="w-28 hidden md:block">分类</span>
+                <span class="w-40 hidden lg:block">标签</span>
+            </div>
+            <a v-for="repo in filteredRepos" :key="repo.id" :href="repo.url" target="_blank" rel="noopener"
+                class="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+                <span class="w-14 text-right text-xs font-medium text-amber-600 dark:text-amber-400">⭐{{ formatStars(repo.stars) }}</span>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{{ repo.name }}</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ repo.summary || repo.description || '' }}</p>
+                </div>
+                <span class="w-24 hidden md:block text-xs text-emerald-600 dark:text-emerald-400">{{ repo.language || '-' }}</span>
+                <span class="w-28 hidden md:block text-xs text-purple-600 dark:text-purple-400 truncate">{{ repo.category || '-' }}</span>
+                <div class="w-40 hidden lg:flex flex-wrap gap-1">
+                    <span v-for="tag in (repo.tags||[]).slice(0,2)" :key="tag" @click.prevent.stop="activeTag=tag"
+                        class="tag-pill text-xs text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 px-1.5 py-0.5 rounded cursor-pointer">#{{ tag }}</span>
+                </div>
+            </a>
+        </div>
+
+        <div v-if="filteredRepos.length===0" class="text-center py-16">
+            <div class="text-4xl mb-3">🔍</div>
+            <p class="text-gray-400">未找到匹配的项目</p>
+            <button @click="clearFilters" class="mt-3 px-4 py-1.5 rounded-lg bg-brand-600 text-white text-sm">清除筛选</button>
+        </div>
+    </div>
+
+    <footer class="text-center py-6 text-xs text-gray-400 dark:text-gray-600 border-t border-gray-100 dark:border-gray-900">
+        Powered by <strong>StarMind Manager</strong>
+    </footer>
+</div>
+{% endraw %}
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+createApp({
+    setup() {
+        const searchQuery = ref('');
+        const activeCategory = ref('');
+        const activeTag = ref('');
+        const isDark = ref(false);
+        const searchInput = ref(null);
+        let fuse = null;
+
+        onMounted(() => {
+            fuse = new Fuse(RAW_DATA, { keys: ['name','summary','description','category','tags','language'], threshold: 0.35, ignoreLocation: true });
+            if (window.matchMedia('(prefers-color-scheme: dark)').matches) { isDark.value = true; document.documentElement.classList.add('dark'); }
+            document.addEventListener('keydown', (e) => {
+                if ((e.key === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !e.target.matches('input,textarea'))) { e.preventDefault(); searchInput.value?.focus(); }
+            });
+        });
+
+        const filteredRepos = computed(() => {
+            let r = [...RAW_DATA];
+            if (searchQuery.value.trim()) r = fuse.search(searchQuery.value.trim()).map(x => x.item);
+            if (activeCategory.value) r = r.filter(x => x.category === activeCategory.value);
+            if (activeTag.value) r = r.filter(x => (x.tags||[]).includes(activeTag.value));
+            r.sort((a,b) => (b.stars||0) - (a.stars||0));
+            return r;
+        });
+
+        return { searchQuery, activeCategory, activeTag, isDark, searchInput, filteredRepos,
+                 categories: ref(CATEGORIES), totalCount: ref(TOTAL_COUNT),
+                 toggleDark: () => { isDark.value = !isDark.value; document.documentElement.classList.toggle('dark', isDark.value); },
+                 formatStars: (c) => c >= 1000 ? (c/1000).toFixed(1)+'k' : c,
+                 clearFilters: () => { searchQuery.value=''; activeCategory.value=''; activeTag.value=''; } };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>

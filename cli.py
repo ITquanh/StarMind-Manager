@@ -8,6 +8,14 @@ import json
 import os
 import sys
 
+# 修复 Windows 终端 GBK 编码无法输出 emoji 的问题
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 # 确保能导入同目录模块
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -24,16 +32,21 @@ def load_config() -> dict:
     return {}
 
 
-def _print_event(event_type, data):
-    """同步事件回调：打印到终端"""
+def _print_event(*args):
+    """同步事件回调：打印到终端（兼容 sync_engine 的多参数调用方式）"""
+    if not args:
+        return
+    event_type = args[0]
     if event_type == 'log':
-        print(data)
+        print(args[1] if len(args) > 1 else "")
     elif event_type == 'progress':
-        processed, total = data
+        processed = args[1] if len(args) > 1 else 0
+        total = args[2] if len(args) > 2 else 0
         pct = int(processed / total * 100) if total else 0
         print(f"  进度: {processed}/{total} ({pct}%)", end="\r")
     elif event_type == 'done':
-        success, fail = data
+        success = args[1] if len(args) > 1 else 0
+        fail = args[2] if len(args) > 2 else 0
         print(f"\n完成: 成功 {success}, 失败 {fail}")
 
 
@@ -76,8 +89,17 @@ def cmd_reanalyze(args):
     config = load_config()
     engine = SyncEngine(config)
     repo_ids = None
-    if args.ids:
+
+    if args.english_only:
+        # 只重新分析简介为英文的项目
+        repo_ids = db.get_english_summary_repo_ids()
+        if not repo_ids:
+            print("✅ 没有发现英文简介的项目，无需处理。")
+            return
+        print(f"🔍 发现 {len(repo_ids)} 个英文简介项目，开始重新分析...")
+    elif args.ids:
         repo_ids = [int(x.strip()) for x in args.ids.split(",")]
+
     engine.reanalyze(
         repo_ids=repo_ids,
         max_workers=args.workers,
@@ -206,6 +228,8 @@ def main():
     # reanalyze
     p_rean = sub.add_parser("reanalyze", help="重新分析项目")
     p_rean.add_argument("--ids", default=None, help="项目 ID (逗号分隔，留空分析全部)")
+    p_rean.add_argument("--english-only", action="store_true", default=False,
+                        help="只重新分析简介为英文的项目")
     p_rean.add_argument("-w", "--workers", type=int, default=3, help="并发线程数 (默认 3)")
     p_rean.set_defaults(func=cmd_reanalyze)
 

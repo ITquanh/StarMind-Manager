@@ -285,6 +285,10 @@ class StarMindApp(ctk.CTk):
             command=self._batch_add_to_collection)
         self.batch_coll_combo.pack(side="left", padx=3, pady=6)
 
+        ctk.CTkButton(batch_frame, text="\ud83d\udd04 \u91cd\u5206\u6790\u82f1\u6587\u7b80\u4ecb", width=140,
+                      fg_color="#6366f1", hover_color="#4f46e5",
+                      command=self._reanalyze_english).pack(side="left", padx=8, pady=6)
+
         coll_frame = ctk.CTkFrame(tab)
         coll_frame.pack(fill="x", padx=10, pady=(0, 5))
         ctk.CTkLabel(coll_frame, text="\U0001f4c1 \u96c6\u5408\u7ba1\u7406:",
@@ -434,6 +438,17 @@ class StarMindApp(ctk.CTk):
             self._log("\u26a0\ufe0f GitHub Token 为空，请先在「配置」填写。")
             return
 
+        # 从 UI 实时读取最新配置
+        self._config = {
+            "github_token": self.gh_token_entry.get().strip(),
+            "github_username": self.gh_username_entry.get().strip(),
+            "llm_base_url": self.llm_url_entry.get().strip(),
+            "llm_api_key": self.llm_key_entry.get().strip(),
+            "llm_model": self.llm_model_entry.get().strip(),
+            "schedule_enabled": self.schedule_var.get(),
+            "schedule_interval": self.schedule_combo.get(),
+        }
+
         self._running = True
         self._stop_event.clear()
         self._stats = {"success": 0, "fail": 0, "skip": 0, "total": 0}
@@ -453,19 +468,22 @@ class StarMindApp(ctk.CTk):
             self._engine.stop()
             self._log("\U0001f6d1 正在停止...")
 
-    def _sync_callback(self, event_type, data):
+    def _sync_callback(self, event_type, *args):
         if event_type == "log":
-            self._log(data)
+            self._log(args[0] if args else "")
         elif event_type == "progress":
-            processed, total = data
+            processed = args[0] if len(args) > 0 else 0
+            total = args[1] if len(args) > 1 else 0
             pct = processed / total if total else 0
-            self.after(0, lambda: self.progress_bar.set(pct))
-            self.after(0, lambda: self.stats_label.configure(
-                text=f"进度: {processed}/{total} ({int(pct*100)}%)"))
+            # 使用默认参数捕获当前值，避免闭包延迟绑定导致所有回调显示最终值
+            self.after(0, lambda p=pct: self.progress_bar.set(p))
+            self.after(0, lambda p=processed, t=total, pc=pct: self.stats_label.configure(
+                text=f"进度: {p}/{t} ({int(pc*100)}%)"))
         elif event_type == "done":
-            success, fail = data
-            self.after(0, lambda: messagebox.showinfo(
-                "同步完成", f"成功: {success}\n失败: {fail}"))
+            success = args[0] if len(args) > 0 else 0
+            fail = args[1] if len(args) > 1 else 0
+            self.after(0, lambda s=success, f=fail: messagebox.showinfo(
+                "同步完成", f"成功: {s}\n失败: {f}"))
             self.after(0, self._finish_sync)
 
     def _finish_sync(self):
@@ -711,8 +729,10 @@ class StarMindApp(ctk.CTk):
         ctk.CTkLabel(left, text="\u96c6\u5408\u5217\u8868",
                      font=ctk.CTkFont(weight="bold")).pack(pady=4)
 
-        coll_listbox = ctk.CTkTextbox(left, width=180, state="disabled")
-        coll_listbox.pack(fill="both", expand=True, padx=4, pady=4)
+        coll_scroll = ctk.CTkScrollableFrame(left, width=180)
+        coll_scroll.pack(fill="both", expand=True, padx=4, pady=4)
+
+        selected_coll = {"name": ""}  # \u7528 dict \u5305\u88c5\u4ee5\u4fbf\u5728\u95ed\u5305\u4e2d\u4fee\u6539
 
         # Right: repos in collection
         right = ctk.CTkFrame(main_frame)
@@ -722,22 +742,31 @@ class StarMindApp(ctk.CTk):
         repo_listbox = ctk.CTkTextbox(right, state="disabled")
         repo_listbox.pack(fill="both", expand=True, padx=4, pady=4)
 
+        def _select_coll(name):
+            selected_coll["name"] = name
+            _show_coll_repos()
+
         def _refresh_coll():
+            for w in coll_scroll.winfo_children():
+                w.destroy()
             colls = db.get_collections()
-            coll_listbox.configure(state="normal")
-            coll_listbox.delete("1.0", "end")
             for c in colls:
-                coll_listbox.insert("end", f"{c['name']} ({c['repo_count']}\u9879)\n")
-            coll_listbox.configure(state="disabled")
+                btn = ctk.CTkButton(
+                    coll_scroll, text=f"{c['name']} ({c['repo_count']}\u9879)",
+                    anchor="w", width=170, height=28,
+                    command=lambda n=c["name"]: _select_coll(n))
+                btn.pack(fill="x", pady=1)
             self._refresh_mgmt_collections()
+            # \u81ea\u52a8\u9009\u4e2d\u7b2c\u4e00\u4e2a\u96c6\u5408
+            if colls and not selected_coll["name"]:
+                selected_coll["name"] = colls[0]["name"]
+                _show_coll_repos()
 
         def _show_coll_repos():
-            sel = dlg.focus_get()
-            # Simple: show repos of first collection for now
-            colls = db.get_collections()
-            if not colls:
+            name = selected_coll["name"]
+            if not name:
                 return
-            repos = db.get_collection_repos(colls[0]["name"])
+            repos = db.get_collection_repos(name)
             repo_listbox.configure(state="normal")
             repo_listbox.delete("1.0", "end")
             for r in repos:
@@ -745,9 +774,12 @@ class StarMindApp(ctk.CTk):
             repo_listbox.configure(state="disabled")
 
         def _delete_selected():
-            name = dlg.focus_get().get("1.0", "end-1c").split(" (")[0].strip()
-            if name and messagebox.askyesno("\u786e\u8ba4", f"\u5220\u9664\u96c6\u5408 [{name}]\uff1f"):
+            name = selected_coll["name"]
+            if not name:
+                return
+            if messagebox.askyesno("\u786e\u8ba4", f"\u5220\u9664\u96c6\u5408 [{name}]\uff1f"):
                 db.delete_collection(name)
+                selected_coll["name"] = ""
                 _refresh_coll()
 
         btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
@@ -805,6 +837,51 @@ class StarMindApp(ctk.CTk):
             return
         db.batch_add_to_collection(coll_name, ids)
         self._log(f"\u2705 \u5df2\u5c06 {len(ids)} \u4e2a\u9879\u76ee\u52a0\u5165 [{coll_name}]")
+
+    def _reanalyze_english(self):
+        """\u91cd\u65b0\u5206\u6790\u6240\u6709\u7b80\u4ecb\u4e3a\u82f1\u6587\u7684\u9879\u76ee"""
+        if self._running:
+            messagebox.showwarning("\u63d0\u793a", "\u5f53\u524d\u6709\u4efb\u52a1\u6b63\u5728\u8fd0\u884c\uff0c\u8bf7\u7b49\u5f85\u5b8c\u6210\u3002")
+            return
+        # \u5b9e\u65f6\u8bfb\u53d6\u6700\u65b0\u914d\u7f6e
+        self._config = {
+            "github_token": self.gh_token_entry.get().strip(),
+            "github_username": self.gh_username_entry.get().strip(),
+            "llm_base_url": self.llm_url_entry.get().strip(),
+            "llm_api_key": self.llm_key_entry.get().strip(),
+            "llm_model": self.llm_model_entry.get().strip(),
+        }
+        base_url = self._config.get("llm_base_url", "")
+        api_key = self._config.get("llm_api_key", "")
+        model = self._config.get("llm_model", "")
+        if not all([base_url, api_key, model]):
+            messagebox.showwarning("\u63d0\u793a", "\u8bf7\u5148\u5728\u300c\u914d\u7f6e\u300d\u9875\u586b\u5199 LLM \u76f8\u5173\u914d\u7f6e\u3002")
+            return
+
+        repo_ids = db.get_english_summary_repo_ids()
+        if not repo_ids:
+            messagebox.showinfo("\u63d0\u793a", "\u2705 \u6ca1\u6709\u53d1\u73b0\u82f1\u6587\u7b80\u4ecb\u7684\u9879\u76ee\uff0c\u65e0\u9700\u5904\u7406\u3002")
+            return
+
+        if not messagebox.askyesno("\u786e\u8ba4",
+                                   f"\u53d1\u73b0 {len(repo_ids)} \u4e2a\u82f1\u6587\u7b80\u4ecb\u9879\u76ee\uff0c\u5c06\u8c03\u7528 AI \u91cd\u65b0\u5206\u6790\u3002\n\n\u662f\u5426\u7ee7\u7eed\uff1f"):
+            return
+
+        self._running = True
+        self._stop_event.clear()
+        self.start_btn.configure(state="disabled")
+        self.stop_btn.configure(state="normal")
+        self.progress_bar.set(0)
+        self._log(f"\ud83d\udd04 \u5f00\u59cb\u91cd\u65b0\u5206\u6790 {len(repo_ids)} \u4e2a\u82f1\u6587\u7b80\u4ecb\u9879\u76ee...")
+
+        self._engine = SyncEngine(self._config)
+        threading.Thread(
+            target=self._engine.reanalyze,
+            kwargs={"repo_ids": repo_ids,
+                    "max_workers": 3,
+                    "callback": self._sync_callback},
+            daemon=True
+        ).start()
 
     # ═══════════════════════════════════
     #          定时同步
@@ -868,7 +945,8 @@ class StarMindApp(ctk.CTk):
                 text=f"\u2705 \u5df2\u5bfc\u51fa\u5230\uff1a{path}", text_color="green")
             self._log(f"\U0001f4e4 \u5df2\u5bfc\u51fa\uff1a{path}")
             if fmt.startswith("html"):
-                webbrowser.open(f"file://{path}")
+                from pathlib import Path
+                webbrowser.open(Path(path).as_uri())
         except Exception as e:
             self.export_status_label.configure(
                 text=f"\u274c \u5bfc\u51fa\u5931\u8d25\uff1a{e}", text_color="red")

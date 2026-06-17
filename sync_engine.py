@@ -12,6 +12,11 @@ import github_api
 import llm
 
 
+def _contains_chinese(text: str) -> bool:
+    """检查文本是否包含中文字符"""
+    return any('一' <= ch <= '鿿' for ch in text)
+
+
 class SyncEngine:
     """同步引擎：封装 GitHub Star 同步与 LLM 重分析的核心流程"""
 
@@ -167,9 +172,26 @@ class SyncEngine:
                 if ai_result.get("language"):
                     repo_data["language"] = ai_result["language"]
 
-        # 5) 兜底
+        # 5) 兜底：若 AI 完整分析失败，检查是否需要翻译英文简介
+        fallback_desc = extra_desc or repo["description"]
         if not repo_data.get("summary"):
-            repo_data["summary"] = extra_desc or repo["description"]
+            if fallback_desc and has_llm and not _contains_chinese(fallback_desc):
+                # 英文简介 → 调用轻量翻译
+                cb('log', f"  🌐 翻译英文简介：{repo['name']}")
+                trans = llm.translate_description(
+                    base_url, api_key, model,
+                    description=fallback_desc,
+                    repo_name=repo["name"],
+                    is_stopped=self._stop_event.is_set,
+                )
+                if trans and trans.get("summary"):
+                    repo_data["summary"] = trans["summary"]
+                    if not repo_data.get("category") or repo_data["category"] == "其他":
+                        repo_data["category"] = trans.get("category", "其他")
+                    if not repo_data.get("tags"):
+                        repo_data["tags"] = trans.get("tags", [])
+            if not repo_data.get("summary"):
+                repo_data["summary"] = fallback_desc
         if not repo_data.get("tags"):
             repo_data["tags"] = repo.get("topics", [])[:3]
         if not repo_data.get("category"):
@@ -240,6 +262,15 @@ class SyncEngine:
                     repo_tree=repo_tree, repo_name=repo_name,
                     is_stopped=self._stop_event.is_set,
                 )
+
+                if not ai_result and description and not _contains_chinese(description):
+                    # 完整分析失败且描述为英文 → 尝试轻量翻译
+                    ai_result = llm.translate_description(
+                        base_url, api_key, model,
+                        description=description,
+                        repo_name=repo_name,
+                        is_stopped=self._stop_event.is_set,
+                    )
 
                 if ai_result:
                     db.update_repo_metadata(

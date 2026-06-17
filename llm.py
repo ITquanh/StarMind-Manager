@@ -141,6 +141,29 @@ def summarize_repo(
     return None
 
 
+def translate_description(
+    base_url: str,
+    api_key: str,
+    model: str,
+    description: str,
+    repo_name: str = "",
+    is_stopped=None
+) -> dict | None:
+    """
+    将英文项目简介翻译为中文摘要，同时生成分类和技术标签。
+    当完整分析失败时，作为轻量级兜底方案。
+    成功返回 dict: {summary, category, tags}
+    失败返回 None
+    """
+    client = OpenAI(base_url=base_url, api_key=api_key)
+    prompt = (
+        f"请将以下 GitHub 项目 [{repo_name}] 的英文简介翻译为通顺专业的中文，"
+        f"同时分析该项目的分类和技术标签。\n\n"
+        f"英文简介：{description[:500]}"
+    )
+    return _call_llm(client, model, prompt, is_stopped)
+
+
 def test_connection(base_url: str, api_key: str, model: str) -> tuple[bool, str]:
     """
     测试 LLM API 连通性。

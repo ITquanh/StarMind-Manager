@@ -103,7 +103,12 @@ def get_existing_ids(owner_username: str = "") -> set:
 def upsert_repo(repo: dict, owner_username: str = ""):
     """插入或更新一条项目记录"""
     conn = get_connection()
-    tags_json = json.dumps(repo.get("tags", []), ensure_ascii=False)
+    tags = repo.get("tags", [])
+    # 兼容：tags 可能是 list 或已经是 JSON 字符串
+    if isinstance(tags, str):
+        tags_json = tags
+    else:
+        tags_json = json.dumps(tags, ensure_ascii=False)
     conn.execute("""
         INSERT INTO starred_repos
             (id, name, stars, summary, category, tags, language, url, description,
@@ -519,6 +524,19 @@ def search_repos(query: str, category: str = "", language: str = "",
     ).fetchall()
     conn.close()
     return _rows_to_repos(rows)
+
+
+def get_english_summary_repo_ids() -> list:
+    """获取 summary 字段不含中文字符的项目 ID 列表（即英文简介项目）"""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT id FROM starred_repos "
+        "WHERE summary IS NOT NULL AND summary != '' "
+        "AND summary NOT GLOB '*[一-龥]*' "
+        "ORDER BY id"
+    ).fetchall()
+    conn.close()
+    return [row["id"] for row in rows]
 
 
 # 模块加载时自动初始化数据库

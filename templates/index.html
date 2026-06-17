@@ -227,12 +227,12 @@ const TRENDS_DATA = {{ trends_json | safe }};
             <div v-if="selectedRepo.starred_at" class="text-xs text-gray-400 mt-2">🕒 收藏于 {{ formatDate(selectedRepo.starred_at) }}</div>
             <p class="mt-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{{ selectedRepo.summary || selectedRepo.description || '暂无描述' }}</p>
 
-            <div v-if="COLLECTIONS_MAP[selectedRepo.id]" class="mt-4 p-3 rounded-lg bg-brand-50 dark:bg-brand-900/20">
+            <div v-if="COLLECTIONS_MAP && COLLECTIONS_MAP[selectedRepo.id]" class="mt-4 p-3 rounded-lg bg-brand-50 dark:bg-brand-900/20">
                 <span class="text-xs font-semibold text-brand-700 dark:text-brand-300">📁 所属集合: </span>
                 <span class="text-sm text-brand-600">{{ COLLECTIONS_MAP[selectedRepo.id].join(', ') }}</span>
             </div>
 
-            <div v-if="SIMILAR_MAP[selectedRepo.id] && SIMILAR_MAP[selectedRepo.id].length" class="mt-6">
+            <div v-if="SIMILAR_MAP && SIMILAR_MAP[selectedRepo.id] && SIMILAR_MAP[selectedRepo.id].length" class="mt-6">
                 <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">🔗 相似项目</h4>
                 <div class="space-y-2">
                     <div v-for="s in SIMILAR_MAP[selectedRepo.id]" :key="s.id"
@@ -270,6 +270,8 @@ createApp({
 
         const categories = ref(CATEGORIES);
         const totalCount = ref(TOTAL_COUNT);
+        const similarMap = SIMILAR_MAP;
+        const collectionsMap = COLLECTIONS_MAP;
 
         onMounted(() => {
             fuse = new Fuse(RAW_DATA, {
@@ -373,6 +375,7 @@ createApp({
 
         return { searchQuery, activeCategory, activeTag, sortBy, isDark, viewMode, selectedRepo,
                  searchInput, categories, totalCount, filteredRepos, tagCloudData,
+                 SIMILAR_MAP, COLLECTIONS_MAP, STATS_DATA, TRENDS_DATA, RAW_DATA,
                  toggleDark, formatStars, formatDate, clearFilters, openDetail, findRepoById };
     }
 }).mount('#app');

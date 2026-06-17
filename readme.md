@@ -1,113 +1,137 @@
-# ⭐ StarMind Manager
+# ⭐ StarMind Manager v2.0
 
-一款面向开发者的 **GitHub Star 资产智能管理工具**。用 AI 将你收藏的项目转化为结构化的中文知识库，支持离线搜索和智能分类。
+一款面向开发者的 **GitHub Star 资产智能管理与可视化知识库工具**。用 AI 将你收藏的项目转化为结构化的中文知识库，支持离线搜索、标签过滤、数据分析、集合分组与多格式导出。
+
+> **v2.0 新版特性**：全新引入数据管理面板、集合分组、Chart.js 数据仪表盘、相似度推荐、趋势分析、多格式导出、定时同步及完整的 CLI 命令行工具，提供 24 项全新功能扩展。
+
+---
 
 ## ✨ 核心功能
 
-- **🔐 可视化配置** - GUI 界面轻松管理 GitHub Token 和 LLM API 密钥
-- **📡 智能同步** - 支持增量更新，只处理新增项目，节省时间和成本
-- **🤖 AI 分析** - 接入大模型自动生成中文摘要、技术标签和分类
-- **🌐 离线知识库** - 导出为单页 HTML，支持全文搜索、标签过滤、暗黑模式
-- **⚡ 高效并发** - 可调节线程数，快速处理数百个项目
+*   **🤖 AI 智能分析与翻译**：
+    *   **深度分析**：自动读取 README/Description 提取生成中文摘要、技术分类与标签。
+    *   **英文翻译兜底**：自动识别英文简介并翻译为中文摘要，保证非中文项目的阅读体验。
+    *   **重分析功能**：支持对所有英文简介或特定项目一键调用 AI 进行重新分析。
+*   **📋 强大的数据管理**：
+    *   **分页表格**：在桌面端提供清晰的项目管理表格，支持手动编辑分类、摘要、标签与备注。
+    *   **集合分组 (Collections)**：支持自定义集合，可对 Star 项目进行归类与收藏。
+    *   **批量操作**：支持批量删除、批量修改分类以及批量加入集合。
+*   **📊 数据可视化 Dashboard**：
+    *   **图表分析**：内置 Chart.js 生成分类分布饼图、语言占比柱状图、Star 分布图与收藏时间线趋势图。
+    *   **数据发现**：支持标签云展示、基于 Jaccard 算法的**相似项目推荐**以及**收藏趋势分析**。
+*   **📤 多格式导出与数据导入**：
+    *   **五种导出格式**：支持导出为精美 HTML 卡片、紧凑型 HTML 列表、Markdown 文档、JSON 数据（可用于备份）、CSV 表格。
+    *   **筛选后导出**：支持根据管理面板中筛选后的结果进行精准导出。
+    *   **导入恢复**：支持一键导入 JSON 备份或 CSV 文件恢复数据库。
+*   **💻 命令行 CLI 模式**：
+    *   提供完整的 `cli.py` 命令行程序，内置 6 大子命令，支持无界面（Headless）同步与服务器自动化运行。
+*   **📦 Windows 一键运行**：
+    *   内置一键打包脚本 `build.bat`。提供 Windows 免安装压缩包，解压后可直接双击运行。
+
+---
 
 ## 🚀 快速开始
 
-### 环境要求
-- Python 3.10+
-- pip
+### 方式 A：直接运行 (Windows 免安装版)
 
-### 安装
+1. 下载项目 Release 中的 [StarMind-Manager-Windows.zip](file:///C:/Users/84787/Desktop/GetGithub/StarMind-Manager-Windows.zip)。
+2. 解压压缩包。
+3. 双击解压目录中的 **`StarMind Manager.exe`** 即可打开图形界面使用。
 
+### 方式 B：源码运行 (开发者模式)
+
+#### 1. 环境要求
+*   Python 3.10+
+*   Git
+
+#### 2. 安装步骤
 ```bash
 # 克隆项目
-git clone https://github.com/yourusername/GetGithub.git
-cd GetGithub
+git clone https://github.com/ITquanh/StarMind-Manager.git
+cd StarMind-Manager
 
 # 安装依赖
 pip install -r requirements.txt
 ```
 
-### 运行
-
+#### 3. 启动图形界面
 ```bash
 python main.py
 ```
 
-## 📖 使用步骤
+---
 
-### 1️⃣ 配置阶段（⚙️ 配置 Tab）
+## 💻 CLI 命令行模式使用
 
-**GitHub 配置：**
-- 填写 Personal Access Token（[获取方法](https://github.com/settings/tokens/new?scopes=repo,read:user&description=StarMind+Manager)）
-- 可选：指定目标用户名（留空则获取 Token 拥有者的 Star）
-- 点击「🔍 检测 Rate Limit」验证 Token 有效性
+StarMind Manager 提供了完整的命令行操作，方便进行自动化和服务器部署：
 
-**LLM 配置：**
-- Base URL：支持所有 OpenAI 兼容接口（DeepSeek、Qwen、Kimi、Ollama 等）
-- API Key：填写对应服务的密钥
-- 模型名称：如 `gpt-3.5-turbo`、`deepseek-chat` 等
-- 点击「🧪 测试连通性」验证配置
+```bash
+# 查看所有命令
+python cli.py --help
 
-### 2️⃣ 同步阶段（🚀 任务 Tab）
+# 1. 增量同步 GitHub Stars
+python cli.py sync --workers 5
 
-- 调节「并发线程数」（建议 5-10，防止被限流）
-- 点击「▶ 开始同步」启动任务
-- 实时查看日志和进度条
-- 支持中途「⏹ 停止」
+# 2. 导出知识库 (支持 html/json/csv/markdown)
+python cli.py export -f html -t compact.html --output-dir ./my_export
 
-### 3️⃣ 导出阶段（📤 导出 Tab）
+# 3. 查看数据库统计信息
+python cli.py stats
 
-- 点击「🔄 刷新统计」查看数据库项目数
-- 点击「🌐 导出为 HTML 知识库」生成离线站点
-- 自动打开浏览器预览，可双击 `index.html` 随时查看
+# 4. 离线全文搜索项目
+python cli.py search "web app" --category "前端开发"
 
-## 🛠 技术栈
+# 5. 重新分析项目 (支持仅重新分析英文简介项目)
+python cli.py reanalyze --english-only --workers 3
 
-| 模块 | 技术 |
-|------|------|
-| **GUI** | CustomTkinter |
-| **数据库** | SQLite3 |
-| **网络** | requests + ThreadPoolExecutor |
-| **模板** | Jinja2 |
-| **前端** | HTML/JS + Vue 3 (CDN) + Tailwind CSS + Fuse.js |
-
-## 📊 数据库结构
-
-项目信息存储在 SQLite 中，包含：
-- 项目名称、URL、Star 数量
-- AI 生成的中文摘要
-- 智能分类和技术标签
-- 主要编程语言
-- 处理时间戳
-
-## 🔒 安全说明
-
-- GitHub Token 和 LLM API Key 保存在本地 `config.json`
-- **建议**：不要将 `config.json` 上传到公开仓库
-- 可使用系统密钥链进一步加密敏感信息
-
-## 📝 常见问题
-
-**Q: 为什么同步很慢？**
-A: 受 GitHub API 限流影响。建议：
-- 使用高权限 Token（提高限额）
-- 减少并发线程数
-- 利用增量更新功能
-
-**Q: LLM 分析失败怎么办？**
-A: 系统会自动降级，使用 GitHub 原生的 Description 和 Topics 字段，确保数据不丢失。
-
-**Q: 导出的 HTML 能在哪里打开？**
-A: 纯静态文件，任何浏览器都支持。可本地打开、上传到 GitHub Pages、Vercel 等。
-
-## 📄 许可证
-
-MIT License
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
+# 6. 对比两个用户的 Star 差异
+python cli.py compare user_a user_b
+```
 
 ---
 
-**Made with ❤️ for developers who love open source**
+## 📖 GUI 界面指南
+
+应用界面分为四大核心 Tab 页面：
+
+1.  **⚙️ 配置 Tab**：
+    *   配置 GitHub Token（[点此创建](https://github.com/settings/tokens/new?scopes=repo,read:user&description=StarMind+Manager)）和目标用户名。
+    *   配置兼容 OpenAI 的大模型 API（如 DeepSeek、Qwen、Ollama、GPT 等）。
+    *   设置**定时自动同步**（每小时/每天/每周）。
+2.  **🚀 任务 Tab**：
+    *   调整并发线程数。
+    *   一键启动同步，实时查看进度条、完成率和详细日志，支持中途平滑停止。
+3.  **📋 管理 Tab**：
+    *   分页查看所有项目，支持按名称、分类、语言进行搜索和多重筛选。
+    *   支持对单条项目进行详情查看、编辑（修改摘要/分类/标签/备注/收藏）、软删除/硬删除。
+    *   右键或通过底部面板进行**批量操作**和**集合管理**。
+4.  **📤 导出 Tab**：
+    *   选择导出格式与导出模板，一键生成静态离线站点。
+    *   支持从外部导入 JSON / CSV 数据，方便进行数据库的迁移与备份恢复。
+
+---
+
+## 🛠️ 技术栈
+
+| 模块 | 使用技术 |
+| :--- | :--- |
+| **桌面 GUI** | CustomTkinter (Python 现代 GUI 库) |
+| **本地数据库** | SQLite3 |
+| **核心引擎** | requests + ThreadPoolExecutor + OpenAI SDK |
+| **数据分析** | Jaccard 相似度算法 + 收藏趋势变化分析 |
+| **导出模块** | Jinja2 模板引擎 |
+| **离线知识库** | Vue 3 + Tailwind CSS + Fuse.js (模糊搜索) + Chart.js (图表) |
+| **打包工具** | PyInstaller |
+
+---
+
+## 🔒 安全说明
+
+*   所有的 GitHub Token、LLM API Key 以及项目数据全部**保存在本地本地**的 `config.json` 和 `starmind.db` 中，不经过任何第三方服务器。
+*   打包生成的 `dist/` 和 `build/` 目录以及敏感配置文件 `config.json` 均已在 `.gitignore` 中配置忽略，防止意外推送到公开仓库。
+
+---
+
+## 📄 许可证
+
+本项目采用 [MIT License](file:///C:/Users/84787/Desktop/GetGithub/LICENSE) 授权开源。
